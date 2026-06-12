@@ -19,11 +19,31 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+  import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyA_VF62-CD0grfsKnZSgDSxWlSjh-h3y8Q",
+    authDomain: "football-db61f.firebaseapp.com",
+    databaseURL: "https://football-db61f-default-rtdb.firebaseio.com",
+    projectId: "football-db61f",
+    storageBucket: "football-db61f.firebasestorage.app",
+    messagingSenderId: "229514911461",
+    appId: "1:229514911461:web:684deb970c8f5696c47e0c"
+  };
+
+  window.app = initializeApp(firebaseConfig);
+  window.db = getDatabase(window.app);
+  window.firebaseRef = ref;
+  window.firebaseSet = set;
+  window.firebaseOnValue = onValue;
+</script>
 <script type="text/babel">
 const { useState, useEffect, useCallback, useMemo } = React;
 
 const MEMBERS = ["Minnu", "Raj", "Suri", "Varsha", "Amala"];
-const STORAGE_KEY = "wc26-family-bets";
+
 
 const GROUP_MATCHES = [
   [1,"MEX","RSA","A","2026-06-11"],[2,"KOR","CZE","A","2026-06-12"],
@@ -90,28 +110,10 @@ function buildMatches() {
 }
 
 function loadSaved(matches) {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return matches;
-    const saved = JSON.parse(raw);
-    return matches.map(m => {
-      const s = saved[m.id];
-      if (!s) return m;
-      return { ...m, predictions: s.p || {}, winner: s.w || "", teamA: s.a || m.teamA, teamB: s.b || m.teamB };
-    });
-  } catch { return matches; }
+  return matches;
 }
 
-function saveAll(matches) {
-  const base = buildMatches();
-  const data = {};
-  matches.forEach(m => {
-    if (m.winner || Object.keys(m.predictions).length || m.teamA !== base.find(x => x.id === m.id)?.teamA) {
-      data[m.id] = { p: m.predictions, w: m.winner, a: m.teamA, b: m.teamB };
-    }
-  });
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
-}
+function saveAll(matches) {}
 
 function getScores(matches) {
   const scores = {};
@@ -267,11 +269,28 @@ const GROUPS = ["All", ..."ABCDEFGHIJKL".split("")];
 
 function App() {
   const [matches, setMatches] = useState(() => loadSaved(buildMatches()));
+  useEffect(() => {
+  if (!window.db) return;
+
+  const betsRef = window.firebaseRef(window.db, "bets");
+
+  window.firebaseOnValue(betsRef, snapshot => {
+    const data = snapshot.val();
+    if (data) setMatches(data);
+  });
+}, []);
+
+useEffect(() => {
+  if (!window.db) return;
+
+  const betsRef = window.firebaseRef(window.db, "bets");
+  window.firebaseSet(betsRef, matches);
+}, [matches]);
   const [tab, setTab] = useState("matches");
   const [stageFilter, setStageFilter] = useState("Groups");
   const [groupFilter, setGroupFilter] = useState("All");
 
-  useEffect(() => { saveAll(matches); }, [matches]);
+
 
   const updateMatch = useCallback((id, field, value, member) => {
     setMatches(prev => prev.map(m => {
