@@ -115,7 +115,7 @@ function toSaveFormat(matches) {
   matches.forEach((m, i) => {
     const orig = BASE[i];
     if (m.winner || Object.keys(m.predictions).length || m.teamA !== orig.teamA || m.teamB !== orig.teamB) {
-      data[m.id] = { p: m.predictions, w: m.winner, a: m.teamA, b: m.teamB };
+      data["m" + m.id] = { p: m.predictions, w: m.winner, a: m.teamA, b: m.teamB };
     }
   });
   return data;
@@ -124,7 +124,7 @@ function toSaveFormat(matches) {
 function applySnapshot(saved) {
   if (!saved) return BASE.map(m => ({...m}));
   return BASE.map(m => {
-    const s = saved[m.id];
+    const s = saved["m" + m.id];
     if (!s) return {...m};
     return { ...m, predictions: s.p || {}, winner: s.w || "", teamA: s.a || m.teamA, teamB: s.b || m.teamB };
   });
@@ -283,29 +283,26 @@ const STAGES = ["Groups", "R32", "R16", "QF", "SF", "Finals"];
 const GROUPS = ["All", ..."ABCDEFGHIJKL".split("")];
 
 function App() {
-  const [matches, setMatches] = useState(() => BASE.map(m => ({...m})));
+  const [matches, setMatches] = useState([]);
   const [tab, setTab] = useState("matches");
   const [stageFilter, setStageFilter] = useState("Groups");
   const [groupFilter, setGroupFilter] = useState("All");
   const [syncStatus, setSyncStatus] = useState("connecting");
 
-  // Flag to prevent write-back when data came from Firebase
-  const fromFirebase = useRef(false);
   const saveTimer = useRef(null);
 
   // ONE listener: Firebase → local state (read)
   useEffect(() => {
-    const cb = dataRef.on("value", (snap) => {
-      fromFirebase.current = true;
+    const handleValue = (snap) => {
       setMatches(applySnapshot(snap.val()));
       setSyncStatus("live");
-    }, () => setSyncStatus("error"));
-    return () => dataRef.off("value", cb);
+    };
+    dataRef.on("value", handleValue, () => setSyncStatus("error"));
+    return () => dataRef.off("value", handleValue);
   }, []);
 
   // User taps a pill → update local state + debounced write to Firebase
   const updateMatch = useCallback((id, field, value, member) => {
-    fromFirebase.current = false;
     setMatches(prev => {
       const next = prev.map(m => {
         if (m.id !== id) return m;
@@ -341,6 +338,14 @@ function App() {
 
   const syncColors = { connecting: "#f59e0b", live: "#22c55e", saving: "#6366f1", error: "#ef4444" };
   const syncText = { connecting: "Connecting...", live: "Synced", saving: "Saving...", error: "Offline" };
+
+  if (matches.length === 0) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", color: "#9ca3af", fontSize: 14 }}>
+        Loading matches...
+      </div>
+    );
+  }
 
   return (
     <div>
