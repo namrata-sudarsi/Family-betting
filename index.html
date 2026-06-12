@@ -12,38 +12,36 @@
   #root { max-width: 480px; margin: 0 auto; padding-bottom: 80px; }
   input { font-family: inherit; }
   button { font-family: inherit; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  .syncing { animation: pulse 1s infinite; }
 </style>
 </head>
 <body>
 <div id="root"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
-  import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyA_VF62-CD0grfsKnZSgDSxWlSjh-h3y8Q",
-    authDomain: "football-db61f.firebaseapp.com",
-    databaseURL: "https://football-db61f-default-rtdb.firebaseio.com",
-    projectId: "football-db61f",
-    storageBucket: "football-db61f.firebasestorage.app",
-    messagingSenderId: "229514911461",
-    appId: "1:229514911461:web:684deb970c8f5696c47e0c"
-  };
-
-  window.app = initializeApp(firebaseConfig);
-  window.db = getDatabase(window.app);
-  window.firebaseRef = ref;
-  window.firebaseSet = set;
-  window.firebaseOnValue = onValue;
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyA_VF62-CD0grfsKnZSgDSxWlSjh-h3y8Q",
+  authDomain: "football-db61f.firebaseapp.com",
+  databaseURL: "https://football-db61f-default-rtdb.firebaseio.com",
+  projectId: "football-db61f",
+  storageBucket: "football-db61f.firebasestorage.app",
+  messagingSenderId: "229514911461",
+  appId: "1:229514911461:web:684deb970c8f5696c47e0c"
+});
+var dataRef = firebase.database().ref("wc26bets");
 </script>
+
 <script type="text/babel">
-const { useState, useEffect, useCallback, useMemo } = React;
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
 const MEMBERS = ["Minnu", "Raj", "Suri", "Varsha", "Amala"];
-
 
 const GROUP_MATCHES = [
   [1,"MEX","RSA","A","2026-06-11"],[2,"KOR","CZE","A","2026-06-12"],
@@ -109,11 +107,28 @@ function buildMatches() {
   }));
 }
 
-function loadSaved(matches) {
-  return matches;
+const BASE = buildMatches();
+
+// Only store diffs (predictions, winners, edited team names) — not all 104 static match objects
+function toSaveFormat(matches) {
+  const data = {};
+  matches.forEach((m, i) => {
+    const orig = BASE[i];
+    if (m.winner || Object.keys(m.predictions).length || m.teamA !== orig.teamA || m.teamB !== orig.teamB) {
+      data[m.id] = { p: m.predictions, w: m.winner, a: m.teamA, b: m.teamB };
+    }
+  });
+  return data;
 }
 
-function saveAll(matches) {}
+function applySnapshot(saved) {
+  if (!saved) return BASE.map(m => ({...m}));
+  return BASE.map(m => {
+    const s = saved[m.id];
+    if (!s) return {...m};
+    return { ...m, predictions: s.p || {}, winner: s.w || "", teamA: s.a || m.teamA, teamB: s.b || m.teamB };
+  });
+}
 
 function getScores(matches) {
   const scores = {};
@@ -255,7 +270,7 @@ function Leaderboard({ matches }) {
           <span style={{ fontSize: 22, width: 30, textAlign: "center" }}>{medals[i] || "#" + (i + 1)}</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>{r.name}</div>
-            <div style={{ fontSize: 11, color: "#9ca3af" }}>{r.points}/{r.predicted} correct {"\u00b7"} {r.accuracy}%</div>
+            <div style={{ fontSize: 11, color: "#9ca3af" }}>{r.points}/{r.predicted} correct · {r.accuracy}%</div>
           </div>
           <div style={{ fontSize: 24, fontWeight: 800, color: "#6366f1" }}>{r.points}</div>
         </div>
@@ -268,67 +283,80 @@ const STAGES = ["Groups", "R32", "R16", "QF", "SF", "Finals"];
 const GROUPS = ["All", ..."ABCDEFGHIJKL".split("")];
 
 function App() {
-  const [matches, setMatches] = useState(() => loadSaved(buildMatches()));
-  useEffect(() => {
-  if (!window.db) return;
-
-  const betsRef = window.firebaseRef(window.db, "bets");
-
-  window.firebaseOnValue(betsRef, snapshot => {
-    const data = snapshot.val();
-    if (data) setMatches(data);
-  });
-}, []);
-
-useEffect(() => {
-  if (!window.db) return;
-
-  const betsRef = window.firebaseRef(window.db, "bets");
-  window.firebaseSet(betsRef, matches);
-}, [matches]);
+  const [matches, setMatches] = useState(() => BASE.map(m => ({...m})));
   const [tab, setTab] = useState("matches");
   const [stageFilter, setStageFilter] = useState("Groups");
   const [groupFilter, setGroupFilter] = useState("All");
+  const [syncStatus, setSyncStatus] = useState("connecting");
 
+  // Flag to prevent write-back when data came from Firebase
+  const fromFirebase = useRef(false);
+  const saveTimer = useRef(null);
 
+  // ONE listener: Firebase → local state (read)
+  useEffect(() => {
+    const cb = dataRef.on("value", (snap) => {
+      fromFirebase.current = true;
+      setMatches(applySnapshot(snap.val()));
+      setSyncStatus("live");
+    }, () => setSyncStatus("error"));
+    return () => dataRef.off("value", cb);
+  }, []);
 
+  // User taps a pill → update local state + debounced write to Firebase
   const updateMatch = useCallback((id, field, value, member) => {
-    setMatches(prev => prev.map(m => {
-      if (m.id !== id) return m;
-      if (field === "prediction") return { ...m, predictions: { ...m.predictions, [member]: value } };
-      return { ...m, [field]: value };
-    }));
+    fromFirebase.current = false;
+    setMatches(prev => {
+      const next = prev.map(m => {
+        if (m.id !== id) return m;
+        if (field === "prediction") return { ...m, predictions: { ...m.predictions, [member]: value } };
+        return { ...m, [field]: value };
+      });
+
+      // Debounce the Firebase write so rapid taps don't spam
+      clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => {
+        setSyncStatus("saving");
+        dataRef.set(toSaveFormat(next))
+          .then(() => setSyncStatus("live"))
+          .catch(() => setSyncStatus("error"));
+      }, 500);
+
+      return next;
+    });
   }, []);
 
   const filtered = useMemo(() => {
     return matches.filter(m => {
       if (stageFilter === "Groups") {
         if (!/^[A-L]$/.test(m.stage)) return false;
-        if (groupFilter !== "All" && m.stage !== groupFilter) return false;
-        return true;
+        return groupFilter === "All" || m.stage === groupFilter;
       }
       if (stageFilter === "Finals") return m.stage === "3rd" || m.stage === "Final";
       return m.stage === stageFilter;
     });
   }, [matches, stageFilter, groupFilter]);
 
-  const progress = useMemo(() => {
-    const decided = matches.filter(m => m.winner).length;
-    return { decided, total: matches.length };
-  }, [matches]);
+  const progress = useMemo(() => ({ decided: matches.filter(m => m.winner).length, total: matches.length }), [matches]);
+
+  const syncColors = { connecting: "#f59e0b", live: "#22c55e", saving: "#6366f1", error: "#ef4444" };
+  const syncText = { connecting: "Connecting...", live: "Synced", saving: "Saving...", error: "Offline" };
 
   return (
     <div>
       <div style={{
         background: "linear-gradient(135deg, #56042c 0%, #8b1538 50%, #1a1a2e 100%)",
-        padding: "16px 14px 12px", color: "#fff",
+        padding: "16px 14px 10px", color: "#fff",
       }}>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, opacity: 0.7, textTransform: "uppercase" }}>
-          FIFA World Cup 2026
-        </div>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, opacity: 0.7, textTransform: "uppercase" }}>FIFA World Cup 2026</div>
         <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>Family Bet Tracker</div>
-        <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
-          {progress.decided}/{progress.total} matches decided
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+          <span style={{ fontSize: 11, opacity: 0.6 }}>{progress.decided}/{progress.total} matches decided</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, opacity: 0.8 }}>
+            <span className={syncStatus === "saving" || syncStatus === "connecting" ? "syncing" : ""}
+              style={{ width: 7, height: 7, borderRadius: "50%", background: syncColors[syncStatus], display: "inline-block" }}></span>
+            {syncText[syncStatus]}
+          </span>
         </div>
       </div>
 
@@ -356,7 +384,6 @@ useEffect(() => {
                 }}>{s}</button>
             ))}
           </div>
-
           {stageFilter === "Groups" && (
             <div style={{ display: "flex", gap: 3, overflowX: "auto", paddingBottom: 8, flexWrap: "wrap" }}>
               {GROUPS.map(g => (
@@ -365,26 +392,21 @@ useEffect(() => {
                     padding: "3px 8px", borderRadius: 6, border: "none", fontSize: 11,
                     fontWeight: 600, cursor: "pointer",
                     background: groupFilter === g ? "#818cf8" : "#f3f4f6",
-                    color: groupFilter === g ? "#fff" : "#9ca3af",
-                    minWidth: 28,
+                    color: groupFilter === g ? "#fff" : "#9ca3af", minWidth: 28,
                   }}>{g}</button>
               ))}
             </div>
           )}
-
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {filtered.map(m => (
-              <MatchCard key={m.id} match={m}
-                onUpdate={(f, v, mem) => updateMatch(m.id, f, v, mem)} />
+              <MatchCard key={m.id} match={m} onUpdate={(f, v, mem) => updateMatch(m.id, f, v, mem)} />
             ))}
           </div>
         </div>
       )}
 
       {tab === "leaderboard" && (
-        <div style={{ padding: 10 }}>
-          <Leaderboard matches={matches} />
-        </div>
+        <div style={{ padding: 10 }}><Leaderboard matches={matches} /></div>
       )}
     </div>
   );
