@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIFA World Cup 2026 — Family Bet Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: #f8f9fa; }
+  #root { max-width: 480px; margin: 0 auto; padding-bottom: 80px; }
+  input { font-family: inherit; }
+  button { font-family: inherit; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<script type="text/babel">
+const { useState, useEffect, useCallback, useMemo } = React;
+
+const MEMBERS = ["Minnu", "Raj", "Suri", "Varsha", "Amala"];
+const STORAGE_KEY = "wc26-family-bets";
+
+const GROUP_MATCHES = [
+  [1,"MEX","RSA","A","2026-06-11"],[2,"KOR","CZE","A","2026-06-12"],
+  [3,"CAN","BIH","B","2026-06-12"],[4,"USA","PAR","D","2026-06-12"],
+  [5,"HAI","SCO","C","2026-06-12"],[6,"AUS","TUR","D","2026-06-12"],
+  [7,"BRA","MAR","C","2026-06-13"],[8,"QAT","SUI","B","2026-06-13"],
+  [9,"CIV","ECU","E","2026-06-13"],[10,"GER","CUW","E","2026-06-13"],
+  [11,"NED","JPN","F","2026-06-13"],[12,"SWE","TUN","F","2026-06-13"],
+  [13,"KSA","URU","H","2026-06-14"],[14,"ESP","CPV","H","2026-06-14"],
+  [15,"IRN","NZL","G","2026-06-14"],[16,"BEL","EGY","G","2026-06-14"],
+  [17,"FRA","SEN","I","2026-06-15"],[18,"IRQ","NOR","I","2026-06-15"],
+  [19,"ARG","ALG","J","2026-06-15"],[20,"AUT","JOR","J","2026-06-15"],
+  [21,"GHA","PAN","L","2026-06-16"],[22,"ENG","CRO","L","2026-06-16"],
+  [23,"POR","COD","K","2026-06-16"],[24,"UZB","COL","K","2026-06-16"],
+  [25,"CZE","RSA","A","2026-06-17"],[26,"SUI","BIH","B","2026-06-17"],
+  [27,"CAN","QAT","B","2026-06-17"],[28,"MEX","KOR","A","2026-06-17"],
+  [29,"BRA","HAI","C","2026-06-18"],[30,"SCO","MAR","C","2026-06-18"],
+  [31,"TUR","PAR","D","2026-06-18"],[32,"USA","AUS","D","2026-06-18"],
+  [33,"GER","CIV","E","2026-06-19"],[34,"ECU","CUW","E","2026-06-19"],
+  [35,"NED","SWE","F","2026-06-19"],[36,"TUN","JPN","F","2026-06-19"],
+  [37,"URU","CPV","H","2026-06-20"],[38,"ESP","KSA","H","2026-06-20"],
+  [39,"BEL","IRN","G","2026-06-20"],[40,"NZL","EGY","G","2026-06-20"],
+  [41,"NOR","SEN","I","2026-06-21"],[42,"FRA","IRQ","I","2026-06-21"],
+  [43,"ARG","AUT","J","2026-06-21"],[44,"JOR","ALG","J","2026-06-21"],
+  [45,"ENG","GHA","L","2026-06-22"],[46,"PAN","CRO","L","2026-06-22"],
+  [47,"POR","UZB","K","2026-06-22"],[48,"COL","COD","K","2026-06-22"],
+  [49,"SCO","BRA","C","2026-06-23"],[50,"MAR","HAI","C","2026-06-23"],
+  [51,"SUI","CAN","B","2026-06-23"],[52,"BIH","QAT","B","2026-06-23"],
+  [53,"CZE","MEX","A","2026-06-24"],[54,"RSA","KOR","A","2026-06-24"],
+  [55,"CUW","CIV","E","2026-06-24"],[56,"ECU","GER","E","2026-06-24"],
+  [57,"JPN","SWE","F","2026-06-25"],[58,"TUN","NED","F","2026-06-25"],
+  [59,"TUR","USA","D","2026-06-25"],[60,"PAR","AUS","D","2026-06-25"],
+  [61,"NOR","FRA","I","2026-06-26"],[62,"SEN","IRQ","I","2026-06-26"],
+  [63,"EGY","IRN","G","2026-06-26"],[64,"NZL","BEL","G","2026-06-26"],
+  [65,"CPV","KSA","H","2026-06-27"],[66,"URU","ESP","H","2026-06-27"],
+  [67,"PAN","ENG","L","2026-06-27"],[68,"CRO","GHA","L","2026-06-27"],
+  [69,"ALG","AUT","J","2026-06-27"],[70,"JOR","ARG","J","2026-06-27"],
+  [71,"COL","POR","K","2026-06-27"],[72,"COD","UZB","K","2026-06-27"],
+];
+
+const KNOCKOUT_MATCHES = [
+  [73,"1A","2B","R32","2026-06-28"],[74,"1E","3ABCDF","R32","2026-06-28"],
+  [75,"1F","2C","R32","2026-06-28"],[76,"1C","2F","R32","2026-06-28"],
+  [77,"1I","3CDFGH","R32","2026-06-28"],[78,"2E","2I","R32","2026-06-29"],
+  [79,"1A","3CEFHI","R32","2026-06-29"],[80,"1L","3EHIJK","R32","2026-06-29"],
+  [81,"1D","3BEFIJ","R32","2026-06-29"],[82,"1G","3AEHIJ","R32","2026-06-30"],
+  [83,"2K","2L","R32","2026-06-30"],[84,"1H","2J","R32","2026-06-30"],
+  [85,"1B","3EFGIJ","R32","2026-06-30"],[86,"1J","2H","R32","2026-07-01"],
+  [87,"1K","3DEIJL","R32","2026-07-01"],[88,"2D","2G","R32","2026-07-01"],
+  [89,"W74","W77","R16","2026-07-02"],[90,"W73","W75","R16","2026-07-02"],
+  [91,"W76","W78","R16","2026-07-03"],[92,"W79","W80","R16","2026-07-03"],
+  [93,"W83","W84","R16","2026-07-04"],[94,"W81","W82","R16","2026-07-04"],
+  [95,"W86","W88","R16","2026-07-05"],[96,"W85","W87","R16","2026-07-05"],
+  [97,"W89","W90","QF","2026-07-08"],[98,"W93","W94","QF","2026-07-08"],
+  [99,"W91","W92","QF","2026-07-09"],[100,"W95","W96","QF","2026-07-09"],
+  [101,"W97","W98","SF","2026-07-13"],[102,"W99","W100","SF","2026-07-14"],
+  [103,"L101","L102","3rd","2026-07-18"],[104,"W101","W102","Final","2026-07-19"],
+];
+
+function buildMatches() {
+  return [...GROUP_MATCHES, ...KNOCKOUT_MATCHES].map(([num, tA, tB, stage, date]) => ({
+    id: num, teamA: tA, teamB: tB, stage, date, predictions: {}, winner: "",
+  }));
+}
+
+function loadSaved(matches) {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return matches;
+    const saved = JSON.parse(raw);
+    return matches.map(m => {
+      const s = saved[m.id];
+      if (!s) return m;
+      return { ...m, predictions: s.p || {}, winner: s.w || "", teamA: s.a || m.teamA, teamB: s.b || m.teamB };
+    });
+  } catch { return matches; }
+}
+
+function saveAll(matches) {
+  const base = buildMatches();
+  const data = {};
+  matches.forEach(m => {
+    if (m.winner || Object.keys(m.predictions).length || m.teamA !== base.find(x => x.id === m.id)?.teamA) {
+      data[m.id] = { p: m.predictions, w: m.winner, a: m.teamA, b: m.teamB };
+    }
+  });
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch {}
+}
+
+function getScores(matches) {
+  const scores = {};
+  MEMBERS.forEach(m => (scores[m] = { correct: 0, predicted: 0 }));
+  matches.forEach(match => {
+    const w = match.winner?.trim();
+    if (!w) return;
+    const isDraw = w.toLowerCase() === "draw";
+    MEMBERS.forEach(m => {
+      if (isDraw) { scores[m].predicted++; scores[m].correct++; }
+      else {
+        const pred = match.predictions?.[m]?.trim();
+        if (pred) { scores[m].predicted++; if (pred.toLowerCase() === w.toLowerCase()) scores[m].correct++; }
+      }
+    });
+  });
+  return MEMBERS.map(m => ({
+    name: m, points: scores[m].correct, predicted: scores[m].predicted,
+    accuracy: scores[m].predicted > 0 ? ((scores[m].correct / scores[m].predicted) * 100).toFixed(0) : "\u2014",
+  })).sort((a, b) => b.points - a.points || parseFloat(b.accuracy) - parseFloat(a.accuracy));
+}
+
+function formatDate(d) {
+  if (!d) return "";
+  return new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+const STAGE_LABELS = { R32: "Round of 32", R16: "Round of 16", QF: "Quarter-Finals", SF: "Semi-Finals", "3rd": "3rd Place", Final: "Final" };
+
+function PillPick({ options, value, onChange, accent }) {
+  return (
+    <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+      {options.map(opt => {
+        const on = value?.toUpperCase() === opt.toUpperCase();
+        return (
+          <button key={opt} onClick={() => onChange(on ? "" : opt)}
+            style={{
+              padding: "3px 10px", borderRadius: 12, fontSize: 12, fontWeight: on ? 700 : 500,
+              border: on ? "none" : "1px solid #d1d5db", cursor: "pointer",
+              background: on ? (accent || "#6366f1") : "#f9fafb",
+              color: on ? "#fff" : "#374151", transition: "all .12s",
+            }}>{opt}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MatchCard({ match, onUpdate }) {
+  const teams = [match.teamA, match.teamB];
+  const w = match.winner?.trim();
+  const isKnockout = !/^[A-L]$/.test(match.stage);
+  const stageLabel = /^[A-L]$/.test(match.stage) ? "Group " + match.stage : (STAGE_LABELS[match.stage] || match.stage);
+  const teamsKnown = !match.teamA.match(/^[12WL]/) && !match.teamB.match(/^[123WL]/);
+
+  return (
+    <div style={{
+      background: "#fff", borderRadius: 10, padding: "10px 12px",
+      border: w ? "1.5px solid #22c55e" : "1px solid #e5e7eb",
+      display: "flex", flexDirection: "column", gap: 6,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{
+            fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+            background: isKnockout ? "#fef3c7" : "#ede9fe", color: isKnockout ? "#92400e" : "#5b21b6",
+          }}>{stageLabel}</span>
+          <span style={{ fontSize: 11, color: "#9ca3af" }}>M{match.id}</span>
+        </div>
+        <span style={{ fontSize: 11, color: "#9ca3af" }}>{formatDate(match.date)}</span>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 15, fontWeight: 700 }}>
+        <span style={{ color: w && w.toUpperCase() === match.teamA.toUpperCase() ? "#16a34a" : "#111" }}>{match.teamA}</span>
+        <span style={{ color: "#d1d5db", fontWeight: 400, fontSize: 12 }}>vs</span>
+        <span style={{ color: w && w.toUpperCase() === match.teamB.toUpperCase() ? "#16a34a" : "#111" }}>{match.teamB}</span>
+        {w && <span style={{ marginLeft: "auto", fontSize: 11, color: "#16a34a", fontWeight: 600 }}>{"\u2713"} {w}</span>}
+      </div>
+
+      {teamsKnown && (
+        <>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 2 }}>
+            {MEMBERS.map(m => {
+              const pred = match.predictions?.[m] || "";
+              const isDraw = w && w.toUpperCase() === "DRAW";
+              const correct = isDraw || (w && pred && pred.toUpperCase() === w.toUpperCase());
+              const wrong = w && !isDraw && pred && pred.toUpperCase() !== w.toUpperCase();
+              return (
+                <div key={m} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{
+                    width: 56, fontSize: 12, fontWeight: 500,
+                    color: correct ? "#16a34a" : wrong ? "#ef4444" : "#6b7280",
+                  }}>
+                    {correct ? "\u2713" : wrong ? "\u2717" : "\u00b7"} {m}
+                  </span>
+                  <PillPick options={teams} value={pred}
+                    onChange={v => onUpdate("prediction", v, m)} />
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 6, display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", width: 56 }}>Result</span>
+            <PillPick options={[...teams, "Draw"]} value={match.winner}
+              onChange={v => onUpdate("winner", v)} accent="#16a34a" />
+          </div>
+        </>
+      )}
+
+      {!teamsKnown && (
+        <div style={{ fontSize: 12, color: "#9ca3af", fontStyle: "italic", padding: "4px 0" }}>
+          Teams TBD — update after earlier rounds
+        </div>
+      )}
+
+      {isKnockout && !teamsKnown && (
+        <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+          <input placeholder="Team A" value={match.teamA} onChange={e => onUpdate("teamA", e.target.value)}
+            style={{ flex: 1, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", fontSize: 13 }} />
+          <input placeholder="Team B" value={match.teamB} onChange={e => onUpdate("teamB", e.target.value)}
+            style={{ flex: 1, padding: "4px 8px", borderRadius: 6, border: "1px solid #e5e7eb", fontSize: 13 }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Leaderboard({ matches }) {
+  const rows = getScores(matches);
+  const medals = ["\ud83e\udd47", "\ud83e\udd48", "\ud83e\udd49"];
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      {rows.map((r, i) => (
+        <div key={r.name} style={{
+          display: "flex", alignItems: "center", gap: 10,
+          background: "#fff", borderRadius: 10, padding: "12px 14px",
+          border: i === 0 && r.points > 0 ? "2px solid #22c55e" : "1px solid #e5e7eb",
+        }}>
+          <span style={{ fontSize: 22, width: 30, textAlign: "center" }}>{medals[i] || "#" + (i + 1)}</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{r.name}</div>
+            <div style={{ fontSize: 11, color: "#9ca3af" }}>{r.points}/{r.predicted} correct {"\u00b7"} {r.accuracy}%</div>
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#6366f1" }}>{r.points}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const STAGES = ["Groups", "R32", "R16", "QF", "SF", "Finals"];
+const GROUPS = ["All", ..."ABCDEFGHIJKL".split("")];
+
+function App() {
+  const [matches, setMatches] = useState(() => loadSaved(buildMatches()));
+  const [tab, setTab] = useState("matches");
+  const [stageFilter, setStageFilter] = useState("Groups");
+  const [groupFilter, setGroupFilter] = useState("All");
+
+  useEffect(() => { saveAll(matches); }, [matches]);
+
+  const updateMatch = useCallback((id, field, value, member) => {
+    setMatches(prev => prev.map(m => {
+      if (m.id !== id) return m;
+      if (field === "prediction") return { ...m, predictions: { ...m.predictions, [member]: value } };
+      return { ...m, [field]: value };
+    }));
+  }, []);
+
+  const filtered = useMemo(() => {
+    return matches.filter(m => {
+      if (stageFilter === "Groups") {
+        if (!/^[A-L]$/.test(m.stage)) return false;
+        if (groupFilter !== "All" && m.stage !== groupFilter) return false;
+        return true;
+      }
+      if (stageFilter === "Finals") return m.stage === "3rd" || m.stage === "Final";
+      return m.stage === stageFilter;
+    });
+  }, [matches, stageFilter, groupFilter]);
+
+  const progress = useMemo(() => {
+    const decided = matches.filter(m => m.winner).length;
+    return { decided, total: matches.length };
+  }, [matches]);
+
+  return (
+    <div>
+      <div style={{
+        background: "linear-gradient(135deg, #56042c 0%, #8b1538 50%, #1a1a2e 100%)",
+        padding: "16px 14px 12px", color: "#fff",
+      }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 2, opacity: 0.7, textTransform: "uppercase" }}>
+          FIFA World Cup 2026
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 800, marginTop: 2 }}>Family Bet Tracker</div>
+        <div style={{ fontSize: 11, opacity: 0.6, marginTop: 2 }}>
+          {progress.decided}/{progress.total} matches decided
+        </div>
+      </div>
+
+      <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e5e7eb" }}>
+        {["matches", "leaderboard"].map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            flex: 1, padding: "10px 0", border: "none", fontSize: 13, fontWeight: 600,
+            cursor: "pointer", background: "transparent",
+            color: tab === t ? "#6366f1" : "#9ca3af",
+            borderBottom: tab === t ? "2px solid #6366f1" : "2px solid transparent",
+          }}>{t === "matches" ? "Matches" : "Leaderboard"}</button>
+        ))}
+      </div>
+
+      {tab === "matches" && (
+        <div style={{ padding: "10px 10px 0" }}>
+          <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 8 }}>
+            {STAGES.map(s => (
+              <button key={s} onClick={() => { setStageFilter(s); setGroupFilter("All"); }}
+                style={{
+                  padding: "5px 10px", borderRadius: 8, border: "none", fontSize: 12,
+                  fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap",
+                  background: stageFilter === s ? "#6366f1" : "#e5e7eb",
+                  color: stageFilter === s ? "#fff" : "#6b7280",
+                }}>{s}</button>
+            ))}
+          </div>
+
+          {stageFilter === "Groups" && (
+            <div style={{ display: "flex", gap: 3, overflowX: "auto", paddingBottom: 8, flexWrap: "wrap" }}>
+              {GROUPS.map(g => (
+                <button key={g} onClick={() => setGroupFilter(g)}
+                  style={{
+                    padding: "3px 8px", borderRadius: 6, border: "none", fontSize: 11,
+                    fontWeight: 600, cursor: "pointer",
+                    background: groupFilter === g ? "#818cf8" : "#f3f4f6",
+                    color: groupFilter === g ? "#fff" : "#9ca3af",
+                    minWidth: 28,
+                  }}>{g}</button>
+              ))}
+            </div>
+          )}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {filtered.map(m => (
+              <MatchCard key={m.id} match={m}
+                onUpdate={(f, v, mem) => updateMatch(m.id, f, v, mem)} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "leaderboard" && (
+        <div style={{ padding: 10 }}>
+          <Leaderboard matches={matches} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
